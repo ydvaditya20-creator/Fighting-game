@@ -1,0 +1,310 @@
+<!DOCTYPE html>
+<html lang="hi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Chibi Fighting Game</title>
+    <style>
+        * {
+            box-sizing: border-box;
+            user-select: none;
+            -webkit-user-select: none;
+        }
+        
+        body {
+            margin: 0; padding: 0;
+            background-color: #1a1a2e;
+            font-family: 'Arial', sans-serif;
+            display: flex; flex-direction: column;
+            align-items: center; justify-content: center;
+            height: 100vh; overflow: hidden;
+        }
+
+        /* गेम स्टेज */
+        #game-stage {
+            position: relative;
+            width: 100%; max-width: 600px; height: 60vh;
+            background: linear-gradient(to bottom, #2b2e4a, #e84545);
+            border: 4px solid #fff; border-radius: 10px;
+            overflow: hidden; box-shadow: 0 10px 20px rgba(0,0,0,0.5);
+        }
+
+        /* हेल्थ बार और यूआई */
+        .ui-container {
+            display: flex; justify-content: space-between;
+            padding: 15px; width: 100%; position: absolute; top: 0; z-index: 10;
+        }
+
+        .health-box { width: 45%; }
+
+        .label {
+            color: white; font-weight: bold; font-size: 14px;
+            margin-bottom: 5px; text-shadow: 1px 1px 2px black;
+        }
+
+        .bar-border {
+            background-color: #555; border: 2px solid #fff;
+            border-radius: 5px; height: 20px; overflow: hidden;
+        }
+
+        .health-bar {
+            height: 100%; background-color: #4caf50; width: 100%;
+            transition: width 0.2s ease;
+        }
+
+        /* कैरेक्टर्स की स्टाइलिंग */
+        .fighter {
+            position: absolute; bottom: 30px;
+            width: 125px; height: 150px;
+            background-repeat: no-repeat; background-size: 500px 150px;
+            transition: transform 0.1s ease, left 0.2s ease;
+        }
+
+        #player {
+            left: 40px; background-image: url('sprite.png'); background-position: 0px 0px; 
+        }
+
+        #enemy {
+            right: 40px; background-image: url('enemy_sprite.png'); background-position: 0px 0px;
+            transform: scaleX(-1);
+        }
+
+        /* एनिमेशन स्टेट्स */
+        .animation-walk { animation: walk 0.5s steps(4) infinite; }
+
+        .player-attack-dash { transform: translateX(60px) !important; }
+        .enemy-attack-dash { transform: scaleX(-1) translateX(60px) !important; }
+
+        @keyframes walk {
+            from { background-position: 0px 0px; }
+            to { background-position: -500px 0px; }
+        }
+
+        /* मोबाइल कंट्रोल्स */
+        #controls {
+            display: flex; justify-content: center; gap: 20px;
+            width: 100%; max-width: 600px; padding: 15px; height: 25vh;
+        }
+
+        .btn {
+            flex: 1; border: none; border-radius: 12px;
+            color: white; font-size: 18px; font-weight: bold;
+            box-shadow: 0 6px #666; transition: all 0.1s ease;
+        }
+
+        .btn:active { box-shadow: 0 2px #444; transform: translateY(4px); }
+        #btn-attack { background-color: #ff4757; }
+        #btn-block { background-color: #2ed573; }
+
+        /* गेम ओवर स्क्रीन */
+        #game-overlay {
+            display: none; position: absolute;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.8); justify-content: center;
+            align-items: center; flex-direction: column; color: white; z-index: 100;
+        }
+
+        #game-overlay h1 { font-size: 32px; margin-bottom: 20px; }
+
+        #restart-btn {
+            padding: 10px 25px; font-size: 18px; background-color: #fff;
+            color: #000; border: none; border-radius: 5px; font-weight: bold;
+        }
+    </style>
+</head>
+<body>
+
+    <div id="game-stage">
+        <div class="ui-container">
+            <div class="health-box">
+                <div class="label">PLAYER (HERO) <span id="p-status"></span></div>
+                <div class="bar-border"><div id="player-health" class="health-bar"></div></div>
+            </div>
+            <div class="health-box">
+                <div class="label" style="text-align: right;"><span id="e-status"></span> ENEMY (AI)</div>
+                <div class="bar-border"><div id="enemy-health" class="health-bar"></div></div>
+            </div>
+        </div>
+
+        <div id="player" class="fighter animation-walk"></div>
+        <div id="enemy" class="fighter animation-walk"></div>
+
+        <div id="game-overlay">
+            <h1 id="game-result">YOU WIN!</h1>
+            <button id="restart-btn">फिर से खेलें</button>
+        </div>
+    </div>
+
+    <div id="controls">
+        <button id="btn-attack" class="btn">ATTACK ⚔️</button>
+        <button id="btn-block" class="btn">BLOCK 🛡️</button>
+    </div>
+
+    <!-- यहाँ हम दोनों स्क्रिप्ट फाइल्स को लिंक कर रहे हैं -->
+    <script>
+    // गेम के मुख्य वेरिएबल्स (स्टेट्स)
+let playerHealth = 100;
+let enemyHealth = 100;
+let playerState = "idle"; // idle, attacking, blocking
+let enemyState = "idle";
+let gameActive = true;
+
+// HTML एलिमेंट्स को सेलेक्ट करना
+const playerEl = document.getElementById('player');
+const enemyEl = document.getElementById('enemy');
+const pHealthBar = document.getElementById('player-health');
+const eHealthBar = document.getElementById('enemy-health');
+const pStatus = document.getElementById('p-status');
+const eStatus = document.getElementById('e-status');
+const overlay = document.getElementById('game-overlay');
+const resultText = document.getElementById('game-result');
+const restartBtn = document.getElementById('restart-btn');
+
+// प्लेयर अटैक (हमला) बटन का टच इवेंट
+document.getElementById('btn-attack').addEventListener('touchstart', (e) => {
+    e.preventDefault();
+    if (!gameActive || playerState !== "idle") return;
+
+    playerState = "attacking";
+    pStatus.innerText = "⚔️ ATTACK!";
+    playerEl.classList.remove('animation-walk');
+    playerEl.classList.add('player-attack-dash');
+    playerEl.style.backgroundPosition = "-250px 0px"; // अटैक फ्रेम (फ्रेम 3)
+
+    // नुकसान (Damage) की गणना करना
+    setTimeout(() => {
+        if (enemyState !== "blocking") {
+            enemyHealth -= 15;
+            if (enemyHealth < 0) enemyHealth = 0;
+            eHealthBar.style.width = enemyHealth + "%";
+            checkGameOver();
+        } else {
+            eStatus.innerText = "🛡️ BLOCKED!";
+        }
+    }, 150);
+
+    // वापस सामान्य स्थिति में आना
+    setTimeout(() => {
+        if (!gameActive) return;
+        playerState = "idle";
+        pStatus.innerText = "";
+        playerEl.classList.remove('player-attack-dash');
+        playerEl.classList.add('animation-walk');
+    }, 400);
+});
+
+// प्लेयर ब्लॉक (बचाव) बटन दबाना
+document.getElementById('btn-block').addEventListener('touchstart', (e) => {
+    e.preventDefault();
+    if (!gameActive || playerState !== "idle") return;
+
+    playerState = "blocking";
+    pStatus.innerText = "🛡️ BLOCKING";
+    playerEl.classList.remove('animation-walk');
+    playerEl.style.backgroundPosition = "-125px 0px"; // ब्लॉक फ्रेम (फ्रेम 2)
+});
+
+// प्लेयर ब्लॉक बटन छोड़ना
+document.getElementById('btn-block').addEventListener('touchend', (e) => {
+    e.preventDefault();
+    if (playerState === "blocking") {
+        playerState = "idle";
+        pStatus.innerText = "";
+        playerEl.classList.add('animation-walk');
+    }
+});
+
+// रीस्टार्ट बटन पर क्लिक करने का इवेंट
+restartBtn.addEventListener('click', resetGame);
+
+// गेम रीसेट करने का फंक्शन
+function resetGame() {
+    playerHealth = 100;
+    enemyHealth = 100;
+    playerState = "idle";
+    enemyState = "idle";
+    gameActive = true;
+    
+    pHealthBar.style.width = "100%";
+    eHealthBar.style.width = "100%";
+    pStatus.innerText = "";
+    eStatus.innerText = "";
+    
+    playerEl.className = "fighter animation-walk";
+    enemyEl.className = "fighter animation-walk";
+    
+    overlay.style.display = "none";
+}
+// कंप्यूटर (AI Enemy) का ऑटोमैटिक डिसीजन सिस्टम
+setInterval(() => {
+    if (!gameActive || enemyState !== "idle") return;
+
+    // 0 से 2 के बीच रैंडम फैसला (0 = अटैक, 1 = ब्लॉक, 2 = वेट)
+    let choice = Math.floor(Math.random() * 3);
+
+    if (choice === 0) {
+        // कंप्यूटर का हमला
+        enemyState = "attacking";
+        eStatus.innerText = "⚔️ ATTACK!";
+        enemyEl.classList.remove('animation-walk');
+        enemyEl.classList.add('enemy-attack-dash');
+        enemyEl.style.backgroundPosition = "-250px 0px"; // एनिमी अटैक फ्रेम
+
+        setTimeout(() => {
+            if (playerState !== "blocking") {
+                playerHealth -= 12;
+                if (playerHealth < 0) playerHealth = 0;
+                pHealthBar.style.width = playerHealth + "%";
+                checkGameOver();
+            } else {
+                pStatus.innerText = "🛡️ BLOCKED!";
+            }
+        }, 150);
+
+        setTimeout(() => {
+            if (!gameActive) return;
+            enemyState = "idle";
+            eStatus.innerText = "";
+            enemyEl.classList.remove('enemy-attack-dash');
+            enemyEl.classList.add('animation-walk');
+        }, 400);
+
+    } else if (choice === 1) {
+        // कंप्यूटर का बचाव (Block)
+        enemyState = "blocking";
+        eStatus.innerText = "🛡️ BLOCKING";
+        enemyEl.classList.remove('animation-walk');
+        enemyEl.style.backgroundPosition = "-125px 0px"; // एनिमी ब्लॉक फ्रेम
+
+        setTimeout(() => {
+            if (!gameActive || enemyState !== "blocking") return;
+            enemyState = "idle";
+            eStatus.innerText = "";
+            enemyEl.classList.add('animation-walk');
+        }, 600);
+    }
+}, 1200); // हर 1.2 सेकंड में कंप्यूटर अपनी चाल बदलेगा
+
+// हर हमले के बाद जीत या हार की जाँच करना
+function checkGameOver() {
+    if (playerHealth <= 0 || enemyHealth <= 0) {
+        gameActive = false;
+        overlay.style.display = "flex";
+        
+        if (playerHealth <= 0 && enemyHealth <= 0) {
+            resultText.innerText = "TIE! MATCH DRAW 🤝";
+        } else if (playerHealth <= 0) {
+            resultText.innerText = "GAME OVER! ENEMY WINS ☠️";
+            playerEl.style.backgroundPosition = "-375px 0px"; // प्लेयर डिफीटेड फ्रेम (फ्रेम 4)
+        } else {
+            resultText.innerText = "YOU WIN! 🎉";
+            enemyEl.style.backgroundPosition = "-375px 0px"; // एनिमी डिफीटेड फ्रेम (फ्रेम 4)
+        }
+    }
+}
+
+    
+    </script>
+    
+</body>
+</html>
