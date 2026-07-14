@@ -142,11 +142,10 @@
 
     <!-- यहाँ हम दोनों स्क्रिप्ट फाइल्स को लिंक कर रहे हैं -->
     <script>
-    // गेम के मुख्य वेरिएबल्स (स्टेट्स)
+  // गेम के मुख्य वेरिएबल्स (स्टेट्स)
 let playerHealth = 100;
 let enemyHealth = 100;
 let playerState = "idle"; // idle, attacking, blocking
-let enemyState = "idle";
 let gameActive = true;
 
 // HTML एलिमेंट्स को सेलेक्ट करना
@@ -169,9 +168,11 @@ document.getElementById('btn-attack').addEventListener('touchstart', (e) => {
     pStatus.innerText = "⚔️ ATTACK!";
     playerEl.classList.remove('animation-walk');
     playerEl.classList.add('player-attack-dash');
-    playerEl.style.backgroundPosition = "-250px 0px"; // अटैक फ्रेम (फ्रेम 3)
+    
+    // दूसरी लाइन (Row 2) का दूसरा फ्रेम दिखाने के लिए: X = -256px, Y = -256px (Slash/Attack Pose)
+    playerEl.style.backgroundPosition = "-256px -256px"; 
 
-    // नुकसान (Damage) की गणना करना
+    // नुकसान की गणना
     setTimeout(() => {
         if (enemyState !== "blocking") {
             enemyHealth -= 15;
@@ -190,6 +191,7 @@ document.getElementById('btn-attack').addEventListener('touchstart', (e) => {
         pStatus.innerText = "";
         playerEl.classList.remove('player-attack-dash');
         playerEl.classList.add('animation-walk');
+        playerEl.style.backgroundPosition = "0px 0px"; // वापस सामान्य स्थिति पर सेट करें
     }, 400);
 });
 
@@ -201,7 +203,9 @@ document.getElementById('btn-block').addEventListener('touchstart', (e) => {
     playerState = "blocking";
     pStatus.innerText = "🛡️ BLOCKING";
     playerEl.classList.remove('animation-walk');
-    playerEl.style.backgroundPosition = "-125px 0px"; // ब्लॉक फ्रेम (फ्रेम 2)
+    
+    // दूसरी लाइन (Row 2) का पहला फ्रेम दिखाने के लिए: X = 0px, Y = -256px (Defense Pose)
+    playerEl.style.backgroundPosition = "0px -256px"; 
 });
 
 // प्लेयर ब्लॉक बटन छोड़ना
@@ -211,6 +215,7 @@ document.getElementById('btn-block').addEventListener('touchend', (e) => {
         playerState = "idle";
         pStatus.innerText = "";
         playerEl.classList.add('animation-walk');
+        playerEl.style.backgroundPosition = "0px 0px";
     }
 });
 
@@ -232,9 +237,14 @@ function resetGame() {
     
     playerEl.className = "fighter animation-walk";
     enemyEl.className = "fighter animation-walk";
+    playerEl.style.backgroundPosition = "0px 0px";
+    enemyEl.style.backgroundPosition = "0px 0px";
     
     overlay.style.display = "none";
 }
+
+let enemyState = "idle"; // एनिमी का डिफ़ॉल्ट स्टेट
+
 // कंप्यूटर (AI Enemy) का ऑटोमैटिक डिसीजन सिस्टम
 setInterval(() => {
     if (!gameActive || enemyState !== "idle") return;
@@ -248,7 +258,9 @@ setInterval(() => {
         eStatus.innerText = "⚔️ ATTACK!";
         enemyEl.classList.remove('animation-walk');
         enemyEl.classList.add('enemy-attack-dash');
-        enemyEl.style.backgroundPosition = "-250px 0px"; // एनिमी अटैक फ्रेम
+        
+        // दूसरी लाइन (Row 2) का दूसरा फ्रेम: X = -256px, Y = -256px (Enemy Attack Pose)
+        enemyEl.style.backgroundPosition = "-256px -256px"; 
 
         setTimeout(() => {
             if (playerState !== "blocking") {
@@ -267,6 +279,7 @@ setInterval(() => {
             eStatus.innerText = "";
             enemyEl.classList.remove('enemy-attack-dash');
             enemyEl.classList.add('animation-walk');
+            enemyEl.style.backgroundPosition = "0px 0px";
         }, 400);
 
     } else if (choice === 1) {
@@ -274,16 +287,19 @@ setInterval(() => {
         enemyState = "blocking";
         eStatus.innerText = "🛡️ BLOCKING";
         enemyEl.classList.remove('animation-walk');
-        enemyEl.style.backgroundPosition = "-125px 0px"; // एनिमी ब्लॉक फ्रेम
+        
+        // दूसरी लाइन (Row 2) का पहला फ्रेम: X = 0px, Y = -256px (Enemy Defense Pose)
+        enemyEl.style.backgroundPosition = "0px -256px"; 
 
         setTimeout(() => {
             if (!gameActive || enemyState !== "blocking") return;
             enemyState = "idle";
             eStatus.innerText = "";
             enemyEl.classList.add('animation-walk');
+            enemyEl.style.backgroundPosition = "0px 0px";
         }, 600);
     }
-}, 1200); // हर 1.2 सेकंड में कंप्यूटर अपनी चाल बदलेगा
+}, 1200);
 
 // हर हमले के बाद जीत या हार की जाँच करना
 function checkGameOver() {
@@ -295,10 +311,12 @@ function checkGameOver() {
             resultText.innerText = "TIE! MATCH DRAW 🤝";
         } else if (playerHealth <= 0) {
             resultText.innerText = "GAME OVER! ENEMY WINS ☠️";
-            playerEl.style.backgroundPosition = "-375px 0px"; // प्लेयर डिफीटेड फ्रेम (फ्रेम 4)
+            // तीसरी लाइन (Row 3) का चौथा फ्रेम दिखाने के लिए: X = -768px, Y = -512px (Defeated Pose)
+            playerEl.style.backgroundPosition = "-768px -512px"; 
         } else {
             resultText.innerText = "YOU WIN! 🎉";
-            enemyEl.style.backgroundPosition = "-375px 0px"; // एनिमी डिफीटेड फ्रेम (फ्रेम 4)
+            // तीसरी लाइन (Row 3) का चौथा फ्रेम: X = -768px, Y = -512px (Enemy Defeated Pose)
+            enemyEl.style.backgroundPosition = "-768px -512px"; 
         }
     }
 }
