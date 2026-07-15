@@ -1,0 +1,258 @@
+<!DOCTYPE html>
+<html lang="hi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>2D Fighting Game</title>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; user-select: none; }
+        body { background: #111; font-family: sans-serif; display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; overflow: hidden; }
+        #gameContainer { position: relative; width: 800px; height: 400px; background: skyblue; border: 4px solid #fff; border-radius: 10px; overflow: hidden; }
+        canvas { width: 100%; height: 100%; display: block; }
+        #ui { position: absolute; top: 10px; left: 10px; color: white; font-size: 20px; font-weight: bold; text-shadow: 2px 2px 4px black; }
+        #controls { position: absolute; bottom: 20px; right: 20px; display: flex; gap: 15px; }
+        .btn { width: 70px; height: 70px; border-radius: 50%; border: 3px solid white; font-weight: bold; font-size: 16px; color: white; cursor: pointer; text-shadow: 1px 1px 2px black; box-shadow: 0 4px 6px rgba(0,0,0,0.3); }
+        #punchBtn { background: #ff5722; }
+        #kickBtn { background: #2196f3; }
+        .btn:active { transform: scale(0.9); }
+    </style>
+</head>
+<body>
+
+<div id="gameContainer">
+    <canvas id="gameCanvas" width="800" height="400"></canvas>
+    <div id="ui">Coins: <span id="scoreVal">0</span></div>
+    <div id="controls">
+        <button id="punchBtn" class="btn">PUNCH</button>
+        <button id="kickBtn" class="btn">KICK</button>
+    </div>
+</div>
+
+<script>
+const canvas = document.getElementById("gameCanvas");
+const ctx = canvas.getContext("2d");
+const scoreVal = document.getElementById("scoreVal");
+
+// इमेज लोड करना (उसी फोल्डर में spritesheet.png नाम से सेव करें)
+const spriteSheet = new Image();
+spriteSheet.src = 'spritesheet.png'; 
+
+// ऑडियो जनरेटर (बिना .mp3 फ़ाइल के कॉइन साउंड बनाने के लिए)
+function playCoinSound() {
+    const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    const osc = audioCtx.createOscillator();
+    const gain = audioCtx.createGain();
+    osc.connect(gain);
+    gain.connect(audioCtx.destination);
+    osc.frequency.setValueAtTime(587.33, audioCtx.currentTime); // D5 note
+    osc.frequency.setValueAtTime(880, audioCtx.currentTime + 0.1); // A5 note
+    gain.gain.setValueAtTime(0.1, audioCtx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.4);
+    osc.start();
+    osc.stop(audioCtx.currentTime + 0.4);
+}
+
+// गेम वेरिएबल्स
+let score = 0;
+let bgOffset = 0;
+
+// स्प्राइट ग्रिड कॉन्फ़िगरेशन (3x3 ग्रिड)
+const spriteW = 1024 / 3; // इमेज चौड़ाई के हिसाब से (अनुमानित)
+const spriteH = 512 / 3;  // इमेज ऊंचाई के हिसाब से (अनुमानित)
+
+// फ्रेम्स की मैपिंग (X_col, Y_row)
+const FRAMES = {
+    STAND: {x: 0, y: 0},
+    CROUCH: {x: 1, y: 0},
+    JUMP: {x: 2, y: 0},
+    ATTACK: {x: 0, y: 1},
+    RUN1: {x: 1, y: 1},
+    RUN2: {x: 2, y: 1},
+    RUN3: {x: 0, y: 2},
+    RUN4: {x: 1, y: 2},
+    KO: {x: 2, y: 2}
+};
+
+// प्लेयर ऑब्जेक्ट
+const player = {
+    x: 150, y: 230, baseY: 230, w: 120, h: 120,
+    state: FRAMES.STAND, vy: 0, isJumping: false, isCrouching: false, isAttacking: false, attackTimer: 0
+};
+
+// दुश्मन ऑब्जेक्ट (अपोजिट कैरेक्टर)
+const enemy = {
+    x: 550, y: 230, w: 120, h: 120,
+    state: FRAMES.STAND, isDead: false, respawnTimer: 0
+};
+
+// कॉइन ऑब्जेक्ट
+const coin = { x: 900, y: 200, size: 15, active: true, speed: 4 };
+
+// हिल क्लाइंब जैसा वेविंग बैकग्राउंड बनाना
+function drawWavyHills() {
+    bgOffset += 1.5; // बैकग्राउंड मूवमेंट स्पीड
+    
+    // गहरी पहाड़ी (Back Hill)
+    ctx.fillStyle = "#27ae60";
+    ctx.beginPath();
+    ctx.moveTo(0, canvas.height);
+    for (let x = 0; x <= canvas.width; x++) {
+        let y = 260 + Math.sin((x + bgOffset) * 0.005) * 40 + Math.cos((x + bgOffset) * 0.01) * 20;
+        ctx.lineTo(x, y);
+    }
+    ctx.lineTo(canvas.width, canvas.height);
+    ctx.fill();
+
+    // सामने की पहाड़ी (Front Hill)
+    ctx.fillStyle = "#2ecc71";
+    ctx.beginPath();
+    ctx.moveTo(0, canvas.height);
+    for (let x = 0; x <= canvas.width; x++) {
+        let y = 300 + Math.sin((x + bgOffset * 1.5) * 0.01) * 30;
+        ctx.lineTo(x, y);
+    }
+    ctx.lineTo(canvas.width, canvas.height);
+    ctx.fill();
+}
+
+// कैरेक्टर रेंडर फंक्शन (मिरर सपोर्ट के साथ)
+function drawCharacter(char, frame, mirror = false) {
+    ctx.save();
+    if (mirror) {
+        ctx.translate(char.x + char.w, char.y);
+        ctx.scale(-1, 1);
+        ctx.drawImage(spriteSheet, frame.x * spriteW, frame.y * spriteH, spriteW, spriteH, 0, 0, char.w, char.h);
+    } else {
+        ctx.drawImage(spriteSheet, frame.x * spriteW, frame.y * spriteH, spriteW, spriteH, char.x, char.y, char.w, char.h);
+    }
+    ctx.restore();
+}
+
+// अटैक एक्शन लॉजिक
+function performAttack() {
+    if (player.isCrouching || player.isJumping) return;
+    player.isAttacking = true;
+    player.state = FRAMES.ATTACK;
+    player.attackTimer = 15; // 15 फ्रेम्स तक अटैक रहेगा
+
+    // दूरी चेक करके दुश्मन को हिट करना
+    if (!enemy.isDead && Math.abs((player.x + player.w) - enemy.x) < 60) {
+        enemy.isDead = true;
+        enemy.state = FRAMES.KO;
+        enemy.respawnTimer = 60; // 60 फ्रेम बाद नया दुश्मन आएगा
+        score += 10;
+        scoreVal.innerText = score;
+        playCoinSound();
+    }
+}
+
+// टच ग्लाइड/स्वाइप डिटेक्शन (Touch Glide Controls)
+let touchStartY = 0;
+canvas.addEventListener('touchstart', (e) => {
+    touchStartY = e.touches[0].clientY;
+});
+
+canvas.addEventListener('touchend', (e) => {
+    let touchEndY = e.changedTouches[0].clientY;
+    let diffY = touchStartY - touchEndY;
+
+    if (diffY > 40) { // ऊपर की तरफ स्वाइप -> जंप
+        if (!player.isJumping && !player.isCrouching) {
+            player.isJumping = true;
+            player.vy = -15;
+            player.state = FRAMES.JUMP;
+        }
+    } else if (diffY < -40) { // नीचे की तरफ स्वाइप -> बैठना
+        if (!player.isJumping) {
+            player.isCrouching = true;
+            player.state = FRAMES.CROUCH;
+            setTimeout(() => { // 1 सेकंड बाद अपने आप खड़ा हो जाएगा
+                player.isCrouching = false;
+                player.state = FRAMES.STAND;
+            }, 1000);
+        }
+    }
+});
+
+// बटन क्लिक इवेंट्स (पंच और किक दोनों के लिए कॉमन अटैक एनिमेशन)
+document.getElementById("punchBtn").addEventListener("click", performAttack);
+document.getElementById("kickBtn").addEventListener("click", performAttack);
+
+// मुख्य गेम लूप (Game Loop)
+function update() {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+    // 1. बैकग्राउंड बनाएं
+    drawWavyHills();
+
+    // 2. प्लेयर मूवमेंट अपडेट
+    if (player.isJumping) {
+        player.y += player.vy;
+        player.vy += 0.8; // ग्रेविटी
+        if (player.y >= player.baseY) {
+            player.y = player.baseY;
+            player.isJumping = false;
+            player.state = FRAMES.STAND;
+        }
+    }
+
+    if (player.isAttacking) {
+        player.attackTimer--;
+        if (player.attackTimer <= 0) {
+            player.isAttacking = false;
+            player.state = player.isCrouching ? FRAMES.CROUCH : FRAMES.STAND;
+        }
+    }
+
+    // 3. दुश्मन लॉजिक अपडेट
+    if (enemy.isDead) {
+        enemy.respawnTimer--;
+        if (enemy.respawnTimer <= 0) {
+            enemy.isDead = false;
+            enemy.state = FRAMES.STAND;
+        }
+    }
+
+    // 4. कॉइन मूवमेंट और कोलिशन (टक्कर)
+    if (coin.active) {
+        coin.x -= coin.speed;
+        // कॉइन ड्रा करें (गोल्डन सर्कल)
+        ctx.fillStyle = "gold";
+        ctx.beginPath();
+        ctx.arc(coin.x, coin.y, coin.size, 0, Math.PI * 2);
+        ctx.fill();
+
+        // प्लेयर और कॉइन की टक्कर चेक करें
+        let px = player.x + player.w/2;
+        let py = player.y + player.h/2;
+        let dist = Math.hypot(coin.x - px, coin.y - py);
+        
+        if (dist < coin.size + 40) {
+            coin.active = false;
+            score += 5;
+            scoreVal.innerText = score;
+            playCoinSound(); // कॉइन साउंड बजाएं
+        }
+
+        if (coin.x < -20) coin.active = false;
+    } else if (Math.random() < 0.01) { // नया कॉइन रीस्पॉन करना
+        coin.x = canvas.width + 20;
+        coin.y = 180 + Math.random() * 80;
+        coin.active = true;
+    }
+
+    // 5. कैरेक्टर्स को ड्रा करना
+    drawCharacter(player, player.state, false); // सीधा प्लेयर
+    drawCharacter(enemy, enemy.state, true);    // उल्टा दुश्मन (Opposite Face)
+
+    requestAnimationFrame(update);
+}
+
+// इमेज लोड होने पर गेम शुरू करें
+spriteSheet.onload = () => {
+    update();
+};
+</script>
+
+</body>
+</html>
