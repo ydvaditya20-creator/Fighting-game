@@ -1,0 +1,373 @@
+<!DOCTYPE html>
+<html lang="hi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>2D मोबाइल हिल क्लाइंब फाइटिंग गेम</title>
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            user-select: none;
+            -webkit-user-select: none;
+        }
+        body {
+            background: linear-gradient(to bottom, #87CEEB, #E0F6FF);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            font-family: Arial, sans-serif;
+            overflow: hidden;
+            touch-action: manipulation;
+        }
+        #ui-container {
+            display: flex;
+            justify-content: space-between;
+            width: 100%;
+            max-width: 800px;
+            margin-bottom: 5px;
+            background: rgba(0, 0, 0, 0.6);
+            padding: 10px;
+            border-radius: 10px;
+            color: white;
+        }
+        .health-bar-container { width: 40%; }
+        .health-label { font-size: 14px; font-weight: bold; margin-bottom: 3px; }
+        .health-bar {
+            width: 100%;
+            height: 15px;
+            background-color: #555;
+            border-radius: 8px;
+            overflow: hidden;
+            border: 1px solid #fff;
+        }
+        .health-fill { height: 100%; width: 100%; transition: width 0.1s ease; }
+        #player-health { background: linear-gradient(to right, #ff4d4d, #ff0000); }
+        #enemy-health { background: linear-gradient(to right, #4da6ff, #0066cc); }
+        #score-container { text-align: center; font-size: 18px; font-weight: bold; color: #ffd700; }
+        
+        #game-wrapper {
+            position: relative;
+            width: 100%;
+            max-width: 800px;
+            aspect-ratio: 2 / 1;
+            border: 4px solid #4a2c00;
+            border-radius: 8px;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.4);
+        }
+        canvas {
+            width: 100%;
+            height: 100%;
+            display: block;
+        }
+        #game-over-screen {
+            display: none;
+            position: absolute;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.8);
+            color: white;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            z-index: 10;
+        }
+        #restart-btn {
+            padding: 10px 20px;
+            font-size: 16px;
+            background: #4e9f3d;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+
+        /* मोबाइल टच कंट्रोल्स स्टाइल */
+        #mobile-controls {
+            display: flex;
+            justify-content: space-between;
+            width: 100%;
+            max-width: 800px;
+            padding: 10px;
+            margin-top: 5px;
+        }
+        .control-group { display: flex; gap: 15px; }
+        .btn {
+            width: 65px;
+            height: 65px;
+            background: rgba(255, 255, 255, 0.7);
+            border: 3px solid #333;
+            border-radius: 50%;
+            font-size: 18px;
+            font-weight: bold;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.3);
+            touch-action: none;
+        }
+        .btn:active {
+            background: #ffd700;
+            transform: scale(0.9);
+        }
+        .action-btn { background: rgba(255, 100, 100, 0.8); color: white; }
+        .action-btn.kick { background: rgba(100, 100, 255, 0.8); }
+    </style>
+</head>
+<body>
+
+    <div id="ui-container">
+        <div class="health-bar-container">
+            <div class="health-label">खिलाड़ी</div>
+            <div class="health-bar"><div id="player-health" class="health-fill"></div></div>
+        </div>
+        <div id="score-container">स्कोर: <span id="score-val">0</span><br><span style="font-size:12px;">लेवल: <span id="level-val">1</span></span></div>
+        <div class="health-bar-container">
+            <div class="health-label" style="text-align: right;">दुश्मन (AI)</div>
+            <div class="health-bar"><div id="enemy-health" class="health-fill"></div></div>
+        </div>
+    </div>
+
+    <div id="game-wrapper">
+        <canvas id="gameCanvas" width="800" height="400"></canvas>
+        <div id="game-over-screen" id="gameOverScreen">
+            <h1 id="win-lose-text">खेल खत्म!</h1>
+            <p style="margin-bottom:10px;">स्कोर: <span id="final-score">0</span></p>
+            <button id="restart-btn" onclick="resetGame()">फिर से खेलें</button>
+        </div>
+    </div>
+
+    <!-- मोबाइल स्क्रीन बटन्स -->
+    <div id="mobile-controls">
+        <div class="control-group">
+            <div class="btn" id="btn-left">◀</div>
+            <div class="btn" id="btn-right">▶</div>
+        </div>
+        <div class="control-group">
+            <div class="btn action-btn punch" id="btn-punch">P</div>
+            <div class="btn action-btn kick" id="btn-kick">K</div>
+        </div>
+    </div>
+
+    <script>
+        // भाग 2 और 3 का कोड यहाँ नीचे जुड़ेगा
+    const canvas = document.getElementById('gameCanvas');
+const ctx = canvas.getContext('2d');
+
+let score = 0;
+let level = 1;
+let gameOver = false;
+
+const spriteSheet = new Image();
+spriteSheet.src = 'sprites.png'; 
+
+// कंट्रोल्स स्टेट
+const keys = { left: false, right: false, punch: false, kick: false };
+
+const player = {
+    x: 150, y: 260, width: 70, height: 90, speed: 5,
+    health: 100, maxHealth: 100, isAttacking: false, attackType: null,
+    direction: 'right', frameX: 0, animTimer: 0,
+    sprites: {
+        idle: { x: 45, y: 340, w: 50, h: 90 },
+        runRight: { x: 260, y: 40, w: 60, h: 90 },
+        runLeft: { x: 40, y: 40, w: 60, h: 90 },
+        punch: { x: 575, y: 40, w: 75, h: 90 },
+        kick: { x: 710, y: 40, w: 75, h: 90 }
+    }
+};
+
+// कीबोर्ड कंट्रोल्स (PC के लिए)
+window.addEventListener('keydown', (e) => {
+    if (gameOver) return;
+    if (e.key === 'ArrowLeft' || e.key === 'a') keys.left = true;
+    if (e.key === 'ArrowRight' || e.key === 'd') keys.right = true;
+    if (e.key === 'z' && !player.isAttacking) triggerPlayerAttack('punch');
+    if (e.key === 'x' && !player.isAttacking) triggerPlayerAttack('kick');
+});
+window.addEventListener('keyup', (e) => {
+    if (e.key === 'ArrowLeft' || e.key === 'a') keys.left = false;
+    if (e.key === 'ArrowRight' || e.key === 'd') keys.right = false;
+});
+
+// --- मोबाइल टच इवेंट्स मैपिंग ---
+const setupMobileButton = (id, actionStr) => {
+    const btn = document.getElementById(id);
+    
+    // टच शुरू होने पर (Press)
+    btn.addEventListener('touchstart', (e) => {
+        e.preventDefault();
+        if (gameOver) return;
+        if (actionStr === 'left') keys.left = true;
+        if (actionStr === 'right') keys.right = true;
+        if (actionStr === 'punch' && !player.isAttacking) triggerPlayerAttack('punch');
+        if (actionStr === 'kick' && !player.isAttacking) triggerPlayerAttack('kick');
+    });
+
+    // टच खत्म होने पर (Release)
+    btn.addEventListener('touchend', (e) => {
+        e.preventDefault();
+        if (actionStr === 'left') keys.left = false;
+        if (actionStr === 'right') keys.right = false;
+    });
+};
+
+// बटन्स को एक्टिवेट करना
+setupMobileButton('btn-left', 'left');
+setupMobileButton('btn-right', 'right');
+setupMobileButton('btn-punch', 'punch');
+setupMobileButton('btn-kick', 'kick');
+
+function triggerPlayerAttack(type) {
+    player.isAttacking = true;
+    player.attackType = type;
+    setTimeout(() => {
+        player.isAttacking = false;
+        player.attackType = null;
+    }, 200);
+}
+
+function updatePlayer() {
+    if (keys.left && player.x > 0) {
+        player.x -= player.speed;
+        player.direction = 'left';
+    } else if (keys.right && player.x < canvas.width - player.width) {
+        player.x += player.speed;
+        player.direction = 'right';
+    }
+    player.animTimer++;
+    if (player.animTimer % 8 === 0) {
+        player.frameX = (player.frameX + 1) % 2;
+    }
+}
+const enemy = {
+    x: 550, y: 260, width: 70, height: 90, speed: 2,
+    health: 100, maxHealth: 100, isAttacking: false, attackType: null,
+    direction: 'left', aiActionTimer: 0,
+    sprites: {
+        idle: { x: 40, y: 790, w: 50, h: 90 },
+        runRight: { x: 260, y: 550, w: 60, h: 90 },
+        runLeft: { x: 40, y: 550, w: 60, h: 90 },
+        punch: { x: 550, y: 550, w: 75, h: 90 },
+        kick: { x: 630, y: 550, w: 75, h: 90 }
+    }
+};
+
+function updateEnemyAI() {
+    if (gameOver) return;
+    enemy.aiActionTimer++;
+
+    if (enemy.x > player.x + 50) {
+        enemy.x -= enemy.speed;
+        enemy.direction = 'left';
+    } else if (enemy.x < player.x - 50) {
+        enemy.x += enemy.speed;
+        enemy.direction = 'right';
+    }
+
+    if (enemy.aiActionTimer % 60 === 0 && Math.abs(enemy.x - player.x) < 80) {
+        enemy.isAttacking = true;
+        enemy.attackType = Math.random() > 0.5 ? 'punch' : 'kick';
+        checkHit(enemy, player);
+        setTimeout(() => {
+            enemy.isAttacking = false;
+            enemy.attackType = null;
+        }, 250);
+    }
+    
+    if (player.isAttacking && Math.abs(player.x - enemy.x) < 80) {
+        checkHit(player, enemy);
+    }
+}
+
+function checkHit(attacker, defender) {
+    if (attacker.isAttacking) {
+        let damage = attacker.attackType === 'kick' ? 8 : 5;
+        defender.health -= damage / 6;
+
+        if (defender.health <= 0) {
+            defender.health = 0;
+            if (defender === enemy) {
+                score += 100 * level;
+                level++;
+                document.getElementById('score-val').innerText = score;
+                document.getElementById('level-val').innerText = level;
+                enemy.health = 100;
+                enemy.x = canvas.width - 100;
+                enemy.speed += 0.4; 
+            } else {
+                endGame();
+            }
+        }
+        updateUI();
+    }
+}
+
+function updateUI() {
+    document.getElementById('player-health').style.width = (player.health / player.maxHealth) * 100 + '%';
+    document.getElementById('enemy-health').style.width = (enemy.health / enemy.maxHealth) * 100 + '%';
+}
+
+function drawHills() {
+    ctx.fillStyle = '#419237';
+    ctx.beginPath(); ctx.arc(200, 460, 200, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = '#337a2a';
+    ctx.beginPath(); ctx.arc(600, 480, 250, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = '#5c3d2e'; ctx.fillRect(0, 350, canvas.width, 50);
+    ctx.fillStyle = '#2e7d32'; ctx.fillRect(0, 350, canvas.width, 10);
+}
+
+function drawCharacter(char, type) {
+    ctx.save();
+    let currentSprite = char.sprites.idle;
+    if (char.isAttacking) {
+        currentSprite = char.attackType === 'punch' ? char.sprites.punch : char.sprites.kick;
+    } else if (keys.left || keys.right || char.speed > 0) {
+        currentSprite = char.direction === 'left' ? char.sprites.runLeft : char.sprites.runRight;
+    }
+
+    try {
+        ctx.drawImage(spriteSheet, currentSprite.x, currentSprite.y, currentSprite.w, currentSprite.h, char.x, char.y, char.width, char.height);
+    } catch (e) {
+        ctx.fillStyle = type === 'player' ? '#ff3333' : '#3333ff';
+        ctx.fillRect(char.x, char.y, char.width, char.height);
+    }
+    ctx.restore();
+}
+
+function gameLoop() {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    drawHills();
+    updatePlayer();
+    updateEnemyAI();
+    drawCharacter(player, 'player');
+    drawCharacter(enemy, 'enemy');
+    if (!gameOver) requestAnimationFrame(gameLoop);
+}
+
+function endGame() {
+    gameOver = true;
+    document.getElementById('game-over-screen').style.display = 'flex';
+    document.getElementById('final-score').innerText = score;
+    document.getElementById('win-lose-text').innerText = "गेम ओवर!";
+}
+
+function resetGame() {
+    player.health = 100; player.x = 150;
+    enemy.health = 100; enemy.x = 550; enemy.speed = 2;
+    score = 0; level = 1; gameOver = false;
+    document.getElementById('game-over-screen').style.display = 'none';
+    document.getElementById('score-val').innerText = score;
+    document.getElementById('level-val').innerText = level;
+    updateUI();
+    gameLoop();
+}
+
+spriteSheet.onload = () => { resetGame(); };
+setTimeout(() => { if(gameOver) resetGame(); }, 1000);
+
+    </script>
+</body>
+</html>
