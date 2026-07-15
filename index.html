@@ -53,32 +53,52 @@
         }
 
         /* कैरेक्टर्स की स्टाइलिंग */
-        .fighter {
-            position: absolute; bottom: 30px;
-            width: 125px; height: 150px;
-            background-repeat: no-repeat; background-size: 500px 150px;
-            transition: transform 0.1s ease, left 0.2s ease;
-        }
+        /* कैरेक्टर्स की नई और सही स्टाइलिंग */
+.fighter {
+    position: absolute; 
+    bottom: -30px; /* नीचे की पोजीशन सेट करने के लिए */
+    width: 256px; 
+    height: 256px; 
+    background-repeat: no-repeat; 
+    background-size: 1024px 1024px; 
+    transition: transform 0.1s ease, left 0.2s ease, right 0.2s ease;
+}
 
-        #player {
-            left: 40px; background-image: url('sprite.png'); background-position: 0px 0px; 
-        }
+/* प्लेयर (लेफ्ट साइड) - साइज को आधा (0.5) करने के लिए */
+#player {
+    left: -40px; /* थोड़ा स्क्रीन के अंदर लाने के लिए */
+    background-image: url('sprite.png'); 
+    background-position: 0px 0px; 
+    transform: scale(0.5); /* यह केवल 1 ही फ्रेम दिखाएगा और साइज छोटा करेगा */
+}
 
-        #enemy {
-            right: 40px; background-image: url('enemy_sprite.png'); background-position: 0px 0px;
-            transform: scaleX(-1);
-        }
+/* कंप्यूटर एनिमी (राइट साइड) - साइज छोटा और चेहरा पलटने के लिए */
+#enemy {
+    right: -40px; /* थोड़ा स्क्रीन के अंदर लाने के लिए */
+    background-image: url('enemy_sprite.png'); 
+    background-position: 0px 0px;
+    transform: scaleX(-1) scale(0.5); /* चेहरा पलटेगा और साइज छोटा करेगा */
+}
 
-        /* एनिमेशन स्टेट्स */
-        .animation-walk { animation: walk 0.5s steps(4) infinite; }
+/* जब कोई हमला करेगा तो वह आगे की तरफ थोड़ा बढेगा */
+/* (नोट: स्केल 0.5 को यहाँ भी बनाए रखना ज़रूरी है) */
+.player-attack-dash { 
+    transform: translateX(50px) scale(0.5) !important; 
+}
+.enemy-attack-dash { 
+    transform: scaleX(-1) translateX(50px) scale(0.5) !important; 
+}
 
-        .player-attack-dash { transform: translateX(60px) !important; }
-        .enemy-attack-dash { transform: scaleX(-1) translateX(60px) !important; }
+/* वॉक एनिमेशन (पहली रो के 4 फ्रेम्स के लिए) */
+.animation-walk { 
+    animation: walk 0.6s steps(4) infinite; 
+}
 
-        @keyframes walk {
-            from { background-position: 0px 0px; }
-            to { background-position: -500px 0px; }
-        }
+@keyframes walk {
+    from { background-position: 0px 0px; }
+    to { background-position: -1024px 0px; } 
+}
+
 
         /* मोबाइल कंट्रोल्स */
         #controls {
